@@ -3,7 +3,7 @@ import threading
 import rpyc
 
 
-SERVER_HOST = "0.0.0.0"
+SERVER_HOST = "192.168.1.236"
 SERVER_PORT = 18861
 
 
@@ -24,7 +24,7 @@ def connect():
             SERVER_HOST,
             SERVER_PORT,
             config={
-                "allow_public_attrs": True
+                "sync_request_timeout": 120
             }
         )
 
@@ -140,7 +140,6 @@ def run_guard(connection, start, stop):
 
     print("[*] Guard stopped.")
 
-
 def defensive_menu(connection):
 
     while True:
@@ -152,6 +151,7 @@ def defensive_menu(connection):
         print("[2] DHCP Guard")
         print("[3] SYN Guard")
         print("[4] ICMP Guard")
+        print("[5] DNS Guard")
         print("[0] Back")
 
         choice = input("Select: ")
@@ -198,12 +198,195 @@ def defensive_menu(connection):
                 connection.root.stop_icmp_guard
             )
 
+        elif choice == "5":
+
+            run_guard(
+                connection,
+                connection.root.start_dns_guard,
+                connection.root.stop_dns_guard
+            )
+
+        elif choice == "0":
+
+            return
+
+        else:
+
+            print("[!] Invalid choice.")
+
+def offensive_menu(connection):
+
+    while True:
+
+        print()
+        print("OFFENSIVE MODE")
+        print("--------------")
+        print("[1] ARP Spoofing")
+        print("[2] DHCP Starvation")
+        print("[3] SYN Flood")
+        print("[4] ICMP Flood")
+        print("[5] DNS Spoofing")
+        print("[0] Back")
+
+        choice = input("Select: ").strip()
+
+        if choice == "1":
+
+            victim = input(
+                "Victim IP: "
+            ).strip()
+
+            if not victim:
+                print("[!] Victim IP is required.")
+                continue
+
+            info = connection.root.get_server_info()
+
+            gateway = input(
+                f"Gateway IP [{info['gateway']}]: "
+            ).strip()
+
+            if not gateway:
+                gateway = info["gateway"]
+
+            connection.root.start_arp_spoof(
+                victim,
+                gateway,
+                info["mac"],
+            )
+
+            print(
+                "[*] ARP spoof started."
+            )
+
+            input(
+                "Press Enter to stop returning to the menu..."
+            )
+
+        elif choice == "2":
+
+            info = connection.root.get_server_info()
+
+            server_ip = input(
+                f"DHCP Server IP [{info['gateway']}]: "
+            ).strip()
+
+            if not server_ip:
+                server_ip = info["gateway"]
+
+            connection.root.start_dhcp_starvation(
+                server_ip
+            )
+
+            print(
+                "[*] DHCP starvation started."
+            )
+
+            input(
+                "Press Enter to stop..."
+            )
+
+            connection.root.stop_dhcp_starvation()
+
+        elif choice == "3":
+
+            victim = input(
+                "Target IP: "
+            ).strip()
+
+            if not victim:
+                print("[!] Target IP is required.")
+                continue
+
+            port = input(
+                "Target port [80]: "
+            ).strip()
+
+            if not port.isdigit():
+                port = 80
+            else:
+                port = int(port)
+
+            connection.root.start_syn_flood(
+                victim,
+                port,
+            )
+
+            print(
+                "[*] SYN flood started."
+            )
+
+            input(
+                "Press Enter to return to menu..."
+            )
+
+        elif choice == "4":
+
+            victim = input(
+                "Target IP: "
+            ).strip()
+
+            if not victim:
+                print("[!] Target IP is required.")
+                continue
+
+            connection.root.start_icmp_flood(
+                victim
+            )
+
+            print(
+                "[*] ICMP flood started."
+            )
+
+            input(
+                "Press Enter to return to menu..."
+            )
+
+        elif choice == "5":
+
+            victim = input(
+                "Victim IP: "
+            ).strip()
+
+            if not victim:
+                print(
+                    "[!] Victim IP is required."
+                )
+                continue
+
+            domain = input(
+                "Target domain [example.com]: "
+            ).strip()
+
+            if not domain:
+                domain = "example.com"
+
+            spoof_ip = input(
+                "Spoof IP [127.0.0.1]: "
+            ).strip()
+
+            if not spoof_ip:
+                spoof_ip = "127.0.0.1"
+
+            connection.root.start_dns_spoof(
+                victim,
+                domain,
+                spoof_ip
+            )
+
+            print(
+                "[*] DNS spoofing started."
+            )
+
+            input(
+                "Press Enter to return..."
+            )
+
         elif choice == "0":
             return
 
         else:
             print("[!] Invalid choice.")
-
 
 def main():
 
@@ -223,7 +406,8 @@ def main():
 
             print("[1] Network Scan")
             print("[2] Defensive Mode")
-            print("[3] Server Information")
+            print("[3] Offensive Mode")
+            print("[4] Server Information")
             print("[0] Exit")
 
             choice = input("Select: ")
@@ -235,6 +419,9 @@ def main():
                 defensive_menu(connection)
 
             elif choice == "3":
+                offensive_menu(connection)
+
+            elif choice == "4":
                 server_info(connection)
 
             elif choice == "0":

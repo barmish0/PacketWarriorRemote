@@ -31,7 +31,15 @@ from defensive.dhcp_guard import (
 from defensive.syn_guard import check_syn_packet
 from defensive.icmp_guard import check_icmp_packet
 
+from defensive.dns_guard import check_dns_packet
+
 from core.firewall import unblock_all_ips
+
+from offensive.arp_spoofer import continuous_arp_dos
+from offensive.dhcp_starvation import start_starve, stop_starve
+from offensive.syn_flood import start_syn_flood
+from offensive.icmp_flood import start_icmp_flood
+from offensive.dns_spoofer import start_dns_spoofer
 
 
 PORT = 18861
@@ -42,6 +50,7 @@ arp_sniffer = None
 dhcp_sniffer = None
 syn_sniffer = None
 icmp_sniffer = None
+dns_sniffer = None
 
 
 def output(message):
@@ -126,8 +135,10 @@ class PacketWarriorService(rpyc.Service):
                 "error": str(error),
             }
 
-    # ---------------- ARP ----------------
+    # ---------------- DEFENSIVE MODULES ----------------
 
+
+    #ARP GUARD
     def exposed_start_arp_guard(self):
 
         global arp_sniffer
@@ -177,8 +188,7 @@ class PacketWarriorService(rpyc.Service):
 
         return True
 
-    # ---------------- DHCP ----------------
-
+    # DHCP GUARD
     def exposed_start_dhcp_guard(self, server_ip):
 
         global dhcp_sniffer
@@ -237,8 +247,7 @@ class PacketWarriorService(rpyc.Service):
 
         return True
 
-    # ---------------- SYN ----------------
-
+    # SYN GUARD
     def exposed_start_syn_guard(self):
 
         global syn_sniffer
@@ -281,8 +290,7 @@ class PacketWarriorService(rpyc.Service):
 
         return True
 
-    # ---------------- ICMP ----------------
-
+    # ICMP GUARD
     def exposed_start_icmp_guard(self):
 
         global icmp_sniffer
@@ -325,6 +333,256 @@ class PacketWarriorService(rpyc.Service):
 
         return True
 
+    # DNS GUARD
+
+    def exposed_start_dns_guard(self):
+
+        global dns_sniffer
+
+        try:
+
+            dns_sniffer = NetworkSniffer(
+                packet_filter="udp dst port 53 or udp src port 53",
+                action_on_packet=check_dns_packet
+            )
+
+            dns_sniffer.start()
+
+            output(
+                "[SERVER] DNS Guard started."
+            )
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] DNS Guard error: {error}"
+            )
+
+            return False
+
+
+    def exposed_stop_dns_guard(self):
+
+        global dns_sniffer
+
+        if dns_sniffer:
+
+            dns_sniffer.stop()
+
+            dns_sniffer = None
+
+        output(
+            "[SERVER] DNS Guard stopped."
+        )
+
+        return True
+
+    # ---------------- OFFENSIVE MODULES ----------------
+
+    #ARP SPOOFING
+    def exposed_start_arp_spoof(
+        self,
+        victim_ip,
+        gateway_ip=None,
+        attacker_mac=None,
+    ):
+
+        output(
+            f"[SERVER] Starting ARP spoofing "
+            f"against {victim_ip}..."
+        )
+
+        try:
+            import threading
+
+            worker = threading.Thread(
+                target=continuous_arp_dos,
+                kwargs={
+                    "victim_ip": victim_ip,
+                    "gateway_ip": gateway_ip,
+                    "attacker_mac": attacker_mac,
+                },
+                daemon=True,
+            )
+
+            worker.start()
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] ARP spoofing error: {error}"
+            )
+
+            return False
+
+
+    # DHCP STARVATION
+    def exposed_start_dhcp_starvation(
+        self,
+        server_ip,
+    ):
+
+        output(
+            f"[SERVER] Starting DHCP starvation "
+            f"against {server_ip}..."
+        )
+
+        try:
+            import threading
+
+            worker = threading.Thread(
+                target=start_starve,
+                kwargs={
+                    "target_ip": server_ip,
+                },
+                daemon=True,
+            )
+
+            worker.start()
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] DHCP starvation error: {error}"
+            )
+
+            return False
+
+
+    def exposed_stop_dhcp_starvation(self):
+
+        try:
+
+            stop_starve()
+
+            output(
+                "[SERVER] DHCP starvation stopped."
+            )
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] DHCP stop error: {error}"
+            )
+
+            return False
+
+    # SYN FLOOD
+    def exposed_start_syn_flood(
+        self,
+        target_ip,
+        target_port=80,
+    ):
+
+        output(
+            f"[SERVER] Starting SYN flood "
+            f"against {target_ip}:{target_port}..."
+        )
+
+        try:
+            import threading
+
+            worker = threading.Thread(
+                target=start_syn_flood,
+                kwargs={
+                    "target_ip": target_ip,
+                    "target_port": target_port,
+                },
+                daemon=True,
+            )
+
+            worker.start()
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] SYN flood error: {error}"
+            )
+
+            return False
+
+    # ICMP FLOOD
+    def exposed_start_icmp_flood(
+        self,
+        target_ip,
+    ):
+
+        output(
+            f"[SERVER] Starting ICMP flood "
+            f"against {target_ip}..."
+        )
+
+        try:
+            import threading
+
+            worker = threading.Thread(
+                target=start_icmp_flood,
+                kwargs={
+                    "target_ip": target_ip,
+                },
+                daemon=True,
+            )
+
+            worker.start()
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] ICMP flood error: {error}"
+            )
+
+            return False
+
+    # DNS SPOOFING
+    def exposed_start_dns_spoof(
+        self,
+        victim_ip,
+        target_domain="example.com",
+        spoof_ip="127.0.0.1"
+    ):
+
+        output(
+            f"[SERVER] Starting DNS spoofing "
+            f"against {victim_ip}..."
+        )
+
+        try:
+
+            import threading
+
+            worker = threading.Thread(
+                target=start_dns_spoofer,
+                kwargs={
+                    "victim_ip": victim_ip,
+                    "target_domain": target_domain,
+                    "spoof_ip": spoof_ip
+                },
+                daemon=True
+            )
+
+            worker.start()
+
+            return True
+
+        except Exception as error:
+
+            output(
+                f"[SERVER] DNS spoof error: {error}"
+            )
+
+            return False
 
 def main():
 
