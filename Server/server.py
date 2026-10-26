@@ -38,17 +38,21 @@ from defensive.dns_guard import check_dns_packet
 
 from core.firewall import unblock_all_ips
 
-from offensive.arp_spoofer import continuous_arp_dos
+from offensive.arp_spoofer import (
+    continuous_arp_dos,
+    reset_arp_spoof_stop,
+    stop_arp_spoof,
+)
 from offensive.dhcp_starvation import start_starve, stop_starve
 from offensive.syn_flood import start_syn_flood
 from offensive.icmp_flood import start_icmp_flood
 from offensive.dns_spoofer import start_dns_spoofer
 
 
-PORT = 18861
+PORT = 18864
 
 CLIENT_IP = "192.168.1.194"
-CLIENT_DISCOVERY_PORT = 18860
+CLIENT_DISCOVERY_PORT = 18863
 
 DISCOVERY_MESSAGE = "PACKETWARRIOR_CONNECT"
 
@@ -430,6 +434,7 @@ class PacketWarriorService(rpyc.Service):
                 daemon=True,
             )
 
+            reset_arp_spoof_stop()
             worker.start()
 
             return True
@@ -441,6 +446,11 @@ class PacketWarriorService(rpyc.Service):
             )
 
             return False
+
+    def exposed_stop_arp_spoof(self):
+        stop_arp_spoof()
+        output("[SERVER] ARP spoof stop requested.")
+        return True
 
 
     # DHCP STARVATION

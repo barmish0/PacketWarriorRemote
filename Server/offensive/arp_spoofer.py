@@ -5,6 +5,15 @@ from scapy.layers.l2 import ARP
 from Server.core.network_info import get_my_ip, get_my_mac, get_default_gateway
 from Server.core.remote_output import remote_print
 
+_stop_event = threading.Event()
+
+def reset_arp_spoof_stop():
+    _stop_event.clear()
+
+
+def stop_arp_spoof():
+    _stop_event.set()
+
 def continuous_arp_dos(
     victim_ip: str = None,
     gateway_ip: str = None,

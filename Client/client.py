@@ -4,8 +4,8 @@ import threading
 import rpyc
 
 
-DISCOVERY_PORT = 18860
-SERVER_PORT = 18861
+DISCOVERY_PORT = 18863
+SERVER_PORT = 18864
 DISCOVERY_MESSAGE = "PACKETWARRIOR_CONNECT"
 
 
@@ -316,9 +316,14 @@ def offensive_menu(connection):
                 "[*] ARP spoof started."
             )
 
-            input(
-                "Press Enter to stop returning to the menu..."
-            )
+            input("Press Enter to stop ARP spoofing...")
+
+            try:
+                stopped = connection.root.stop_arp_spoof()
+                if stopped:
+                    print("[+] Stop request sent to server.")
+            except Exception as error:
+                print(f"[!] Failed to stop ARP spoofing: {error}")
 
         elif choice == "2":
 
