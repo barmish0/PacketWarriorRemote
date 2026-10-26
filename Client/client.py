@@ -1,10 +1,12 @@
+import socket
 import time
 import threading
 import rpyc
 
 
-SERVER_HOST = "192.168.1.236"
+DISCOVERY_PORT = 18860
 SERVER_PORT = 18861
+DISCOVERY_MESSAGE = "PACKETWARRIOR_CONNECT"
 
 
 def connect():
@@ -13,15 +15,70 @@ def connect():
     print("       PACKETWARRIOR REMOTE CLIENT")
     print("=" * 60)
 
+    sock = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_DGRAM
+    )
+
+    sock.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEADDR,
+        1
+    )
+
+    try:
+
+        sock.bind(
+            ("0.0.0.0", DISCOVERY_PORT)
+        )
+
+        print(
+            f"[*] Waiting for server on UDP "
+            f"port {DISCOVERY_PORT}..."
+        )
+
+        while True:
+
+            data, address = sock.recvfrom(1024)
+
+            message = data.decode(
+                "utf-8",
+                errors="ignore"
+            ).strip()
+
+            if message != DISCOVERY_MESSAGE:
+                continue
+
+            server_host = address[0]
+
+            print(
+                f"[+] Server found: "
+                f"{server_host}"
+            )
+
+            break
+
+    except Exception as error:
+
+        print("[!] Discovery failed:")
+        print(error)
+
+        sock.close()
+        return None
+
+    finally:
+
+        sock.close()
+
     print(
         f"[*] Connecting to "
-        f"{SERVER_HOST}:{SERVER_PORT}..."
+        f"{server_host}:{SERVER_PORT}..."
     )
 
     try:
 
         connection = rpyc.connect(
-            SERVER_HOST,
+            server_host,
             SERVER_PORT,
             config={
                 "sync_request_timeout": 120
@@ -38,7 +95,6 @@ def connect():
         print(error)
 
         return None
-
 
 def get_output(connection):
 
@@ -109,28 +165,29 @@ def run_guard(connection, start, stop):
     print("[*] Press Enter to stop.")
     print()
 
-    stopped = False
+    running = threading.Event()
+    running.set()
 
-    def wait():
+    def output_loop():
 
-        nonlocal stopped
+        while running.is_set():
 
-        input()
+            get_output(connection)
 
-        stopped = True
+            time.sleep(0.1)
 
     thread = threading.Thread(
-        target=wait,
+        target=output_loop,
         daemon=True
     )
 
     thread.start()
 
-    while not stopped:
+    input()
 
-        get_output(connection)
+    running.clear()
 
-        time.sleep(0.25)
+    thread.join(timeout=1)
 
     stop()
 

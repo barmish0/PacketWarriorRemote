@@ -1,5 +1,8 @@
 import socket
 import queue
+import threading
+import time
+
 import rpyc
 
 from rpyc.utils.server import ThreadedServer
@@ -44,6 +47,11 @@ from offensive.dns_spoofer import start_dns_spoofer
 
 PORT = 18861
 
+CLIENT_IP = "192.168.1.194"
+CLIENT_DISCOVERY_PORT = 18860
+
+DISCOVERY_MESSAGE = "PACKETWARRIOR_CONNECT"
+
 output_queue = queue.Queue()
 
 arp_sniffer = None
@@ -61,8 +69,23 @@ def output(message):
 class PacketWarriorService(rpyc.Service):
 
     def on_connect(self, connection):
+
+        try:
+
+            client_ip, client_port = (
+                connection._channel.stream.sock.getpeername()
+            )
+
+            output(
+                f"[+] Client connected: "
+                f"{client_ip}:{client_port}"
+            )
+
+        except Exception:
+
+            output("[+] Client connected.")
+
         set_callback(output)
-        output("[+] Client connected.")
 
     def on_disconnect(self, connection):
         set_callback(None)
@@ -584,6 +607,38 @@ class PacketWarriorService(rpyc.Service):
 
             return False
 
+def request_client_connection():
+
+    sock = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_DGRAM
+    )
+
+    try:
+
+        sock.sendto(
+            DISCOVERY_MESSAGE.encode(),
+            (
+                CLIENT_IP,
+                CLIENT_DISCOVERY_PORT
+            )
+        )
+
+        print(
+            f"[+] Connection request sent to "
+            f"{CLIENT_IP}:{CLIENT_DISCOVERY_PORT}"
+        )
+
+    except Exception as error:
+
+        print(
+            f"[!] Failed to contact client: {error}"
+        )
+
+    finally:
+
+        sock.close()
+
 def main():
 
     print("=" * 60)
@@ -596,21 +651,49 @@ def main():
     print("Port:", PORT)
 
     print()
-    print("[*] Waiting for client...")
+    print(
+        f"[*] Client configured as "
+        f"{CLIENT_IP}:{CLIENT_DISCOVERY_PORT}"
+    )
 
     server = ThreadedServer(
         PacketWarriorService,
         hostname="0.0.0.0",
         port=PORT,
         protocol_config={
-            "allow_public_attrs": True
+            "allow_public_attrs": True,
+            "sync_request_timeout": 120
         }
     )
 
+    def start_rpyc():
+
+        try:
+            server.start()
+
+        except KeyboardInterrupt:
+            server.close()
+
+    rpyc_thread = threading.Thread(
+        target=start_rpyc,
+        daemon=True
+    )
+
+    rpyc_thread.start()
+
+    time.sleep(0.5)
+
+    request_client_connection()
+
+    print("[*] Waiting for client...")
+
     try:
-        server.start()
+
+        while rpyc_thread.is_alive():
+            time.sleep(1)
 
     except KeyboardInterrupt:
+
         server.close()
 
 
